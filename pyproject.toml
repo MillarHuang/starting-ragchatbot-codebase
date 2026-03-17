@@ -1,3 +1,6 @@
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
 [project]
 name = "starting-codebase"
 version = "0.1.0"

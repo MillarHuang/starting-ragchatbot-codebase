@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/86999/**)",
+      "Bash(find:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}
