@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
-    
+
     setupEventListeners();
     createNewSession();
     loadCourseStats();
@@ -37,7 +37,6 @@ function setupEventListeners() {
         if (e.key === 'Enter') sendMessage();
     });
 
-
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -47,7 +46,6 @@ function setupEventListeners() {
         });
     });
 }
-
 
 // Chat Functions
 async function sendMessage() {
@@ -82,7 +80,7 @@ async function sendMessage() {
         if (!response.ok) throw new Error('Query failed');
 
         const data = await response.json();
-        
+
         // Update session ID if new
         if (!currentSessionId) {
             currentSessionId = data.session_id;
@@ -151,8 +149,6 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
-
-// Removed removeMessage function - no longer needed since we handle loading differently
 
 async function createNewSession() {
     currentSessionId = null;
