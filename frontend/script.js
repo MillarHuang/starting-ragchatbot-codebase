@@ -15,14 +15,55 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
-    
+
     setupEventListeners();
+    initTheme();
     createNewSession();
     loadCourseStats();
 });
 
+// Theme Toggle
+function initTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved !== 'light') return;
+
+    // Apply theme before first paint with transitions disabled so there is no
+    // dark→light flash when restoring a saved preference on page load.
+    document.body.classList.add('no-transition');
+    document.body.setAttribute('data-theme', 'light');
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            document.body.classList.remove('no-transition');
+        });
+    });
+}
+
+function toggleTheme() {
+    const btn = document.getElementById('themeToggle');
+    const isLight = document.body.getAttribute('data-theme') === 'light';
+
+    if (isLight) {
+        document.body.removeAttribute('data-theme');
+    } else {
+        document.body.setAttribute('data-theme', 'light');
+    }
+
+    const nowLight = !isLight;
+    localStorage.setItem('theme', nowLight ? 'light' : 'dark');
+
+    // Keep aria-pressed in sync so screen readers announce the current state
+    btn.setAttribute('aria-pressed', String(nowLight));
+
+    // One-shot spin animation on the icon
+    btn.classList.add('spinning');
+    btn.addEventListener('animationend', () => btn.classList.remove('spinning'), { once: true });
+}
+
 // Event Listeners
 function setupEventListeners() {
+    // Theme toggle
+    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
     // New chat button
     document.getElementById('newChatBtn').addEventListener('click', () => {
         if (currentSessionId) {
