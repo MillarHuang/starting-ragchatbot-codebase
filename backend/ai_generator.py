@@ -3,15 +3,21 @@ from typing import List, Optional, Dict, Any
 
 class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
-    
+
+    MAX_TOOL_ROUNDS = 2
+
     # Static system prompt to avoid rebuilding on each call
     SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to a comprehensive search tool for course information.
 
 Search Tool Usage:
 - Use the search tool **only** for questions about specific course content or detailed educational materials
-- **One search per query maximum**
+- You may perform **up to 2 sequential searches** per query
+- Use a second search only if the first result is insufficient to fully answer the question
+- Do not search twice for the same topic
 - Synthesize search results into accurate, fact-based responses
 - If search yields no results, state this clearly without offering alternatives
+- Use **get_course_outline** for questions about a course's structure, lesson list, or overview (e.g. "what lessons does X have?", "show me the outline of Y")
+- For outline queries, return: course title, course link, and each lesson number with its title
 
 Response Protocol:
 - **General knowledge questions**: Answer using existing knowledge without searching
@@ -78,58 +84,48 @@ Provide only the direct answer to what was asked.
         
         # Get response from Claude
         response = self.client.messages.create(**api_params)
-        
-        # Handle tool execution if needed
-        if response.stop_reason == "tool_use" and tool_manager:
-            return self._handle_tool_execution(response, api_params, tool_manager)
-        
-        # Return direct response
-        return response.content[0].text
-    
-    def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
-        """
-        Handle execution of tool calls and get follow-up response.
-        
-        Args:
-            initial_response: The response containing tool use requests
-            base_params: Base API parameters
-            tool_manager: Manager to execute tools
-            
-        Returns:
-            Final response text after tool execution
-        """
-        # Start with existing messages
-        messages = base_params["messages"].copy()
-        
-        # Add AI's tool use response
-        messages.append({"role": "assistant", "content": initial_response.content})
-        
-        # Execute all tool calls and collect results
-        tool_results = []
-        for content_block in initial_response.content:
-            if content_block.type == "tool_use":
-                tool_result = tool_manager.execute_tool(
-                    content_block.name, 
-                    **content_block.input
-                )
-                
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": tool_result
-                })
-        
-        # Add tool results as single message
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
-        
-        # Prepare final API call without tools
-        final_params = {
-            **self.base_params,
-            "messages": messages,
-            "system": base_params["system"]
-        }
-        
-        # Get final response
-        final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+
+        # Tool-use loop: up to MAX_TOOL_ROUNDS sequential rounds
+        messages = api_params["messages"]
+        for _ in range(self.MAX_TOOL_ROUNDS):
+            if response.stop_reason != "tool_use" or not tool_manager:
+                break
+
+            # Append assistant turn
+            messages = messages + [{"role": "assistant", "content": response.content}]
+
+            # Execute all tool calls
+            tool_results = []
+            error_occurred = False
+            for content_block in response.content:
+                if content_block.type == "tool_use":
+                    try:
+                        tool_result = tool_manager.execute_tool(
+                            content_block.name,
+                            **content_block.input
+                        )
+                    except Exception as e:
+                        tool_result = f"Tool execution error: {e}"
+                        error_occurred = True
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": content_block.id,
+                        "content": tool_result
+                    })
+
+            # Append tool results as user turn
+            messages = messages + [{"role": "user", "content": tool_results}]
+
+            # Next API call with accumulated messages (tools remain in params)
+            api_params = {**api_params, "messages": messages}
+            response = self.client.messages.create(**api_params)
+
+            if error_occurred:
+                break
+
+        # Return first TextBlock found
+        for block in response.content:
+            if block.type == "text":
+                return block.text
+        return ""

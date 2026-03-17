@@ -123,14 +123,14 @@ class VectorStore:
         # Handle different filter combinations
         if course_title and lesson_number is not None:
             return {"$and": [
-                {"course_title": course_title},
-                {"lesson_number": lesson_number}
+                {"course_title": {"$eq": course_title}},
+                {"lesson_number": {"$eq": lesson_number}}
             ]}
-        
+
         if course_title:
-            return {"course_title": course_title}
-            
-        return {"lesson_number": lesson_number}
+            return {"course_title": {"$eq": course_title}}
+
+        return {"lesson_number": {"$eq": lesson_number}}
     
     def add_course_metadata(self, course: Course):
         """Add course information to the catalog for semantic search"""
@@ -246,6 +246,25 @@ class VectorStore:
             print(f"Error getting course link: {e}")
             return None
     
+    def get_course_outline(self, course_name: str) -> Optional[Dict[str, Any]]:
+        """Get structured course outline (title, link, lessons) for a given course name"""
+        import json
+        resolved_title = self._resolve_course_name(course_name)
+        if not resolved_title:
+            return None
+        try:
+            results = self.course_catalog.get(ids=[resolved_title])
+            if results and results['metadatas']:
+                meta = results['metadatas'][0]
+                return {
+                    "title": meta.get("title"),
+                    "course_link": meta.get("course_link"),
+                    "lessons": json.loads(meta.get("lessons_json", "[]"))
+                }
+        except Exception as e:
+            print(f"Error getting course outline: {e}")
+        return None
+
     def get_lesson_link(self, course_title: str, lesson_number: int) -> Optional[str]:
         """Get lesson link for a given course title and lesson number"""
         import json
